@@ -1,4 +1,4 @@
-const DATA_URL = 'https://op.europa.eu/o/opendata/ubu/de-bias-vocabulary.ttl';
+const DATA_URL = 'https://op.europa.eu/o/opportal-service/euvoc-download-handler?cellarURI=http%3A%2F%2Fpublications.europa.eu%2Fresource%2Fdistribution%2Fde-bias-vocabulary%2F20250402-0%2Fttl%2Fskos_xl%2FDE-BIAS_vocabulary.ttl&fileName=DE-BIAS_vocabulary.ttl';
 const FALLBACK_KEY = 'debias-fallback';
 
 async function loadData() {

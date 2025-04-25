@@ -1,44 +1,65 @@
-const store = $rdf.graph();
-const fetcher = new $rdf.Fetcher(store);
+// script.js
 
-const ttlUrl = "data/DE-BIAS_vocabulary.ttl"; // Local GitHub-hosted copy
+// Namespaces
 const SKOS = $rdf.Namespace("http://www.w3.org/2004/02/skos/core#");
 const DCT = $rdf.Namespace("http://purl.org/dc/terms/");
 
+// Where we find the TTL
+const ttlUrl = "data/DE-BIAS_vocabulary.ttl";
+
+// RDF store
+const store = $rdf.graph();
+
+// Main loader
 async function loadVocabulary() {
   try {
-    await fetcher.load(ttlUrl);
+    // 1) Fetch the TTL file via standard fetch()
+    const resp = await fetch(ttlUrl);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
 
-    const concepts = store.statementsMatching(undefined, SKOS("prefLabel"), undefined);
-    const termMap = new Map();
+    const ttlText = await resp.text();
 
-    concepts.forEach(({ subject, object }) => {
-      if (!termMap.has(subject.value)) {
-        termMap.set(subject.value, {
-          uri: subject.value,
-          labels: [],
-          alternatives: [],
-        });
-      }
-      const langLabel = `${object.value} [${object.lang}]`;
-      termMap.get(subject.value).labels.push(langLabel);
-    });
+    // 2) Parse it into our rdflib store
+    $rdf.parse(ttlText, store, ttlUrl, "text/turtle");
 
-    store.statementsMatching(undefined, SKOS("altLabel"), undefined).forEach(({ subject, object }) => {
-      if (termMap.has(subject.value)) {
-        const langAlt = `${object.value} [${object.lang}]`;
-        termMap.get(subject.value).alternatives.push(langAlt);
-      }
-    });
+    // 3) Extract and display
+    const terms = extractTerms(store);
+    displayTerms(terms);
+    displayMetadata(store);
 
-    displayTerms([...termMap.values()]);
-    showMetadata();
   } catch (err) {
-    document.querySelector("main").innerHTML = "<p>⚠️ Failed to load vocabulary.</p>";
-    console.error(err);
+    console.error("Error loading TTL:", err);
+    document.querySelector("main").innerHTML =
+      `<p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>`;
   }
 }
 
+// Pull all prefLabel + altLabel into a JS array
+function extractTerms(store) {
+  const termMap = new Map();
+
+  // Gather preferred labels
+  store.statementsMatching(undefined, SKOS("prefLabel"), undefined)
+    .forEach(({ subject, object }) => {
+      const key = subject.value;
+      if (!termMap.has(key)) termMap.set(key, { uri: key, labels: [], alts: [] });
+      termMap.get(key).labels.push(`${object.value} [${object.lang}]`);
+    });
+
+  // Gather alternative labels
+  store.statementsMatching(undefined, SKOS("altLabel"), undefined)
+    .forEach(({ subject, object }) => {
+      const key = subject.value;
+      if (termMap.has(key)) {
+        termMap.get(key).alts.push(`${object.value} [${object.lang}]`);
+      }
+    });
+
+  // Convert to array
+  return Array.from(termMap.values());
+}
+
+// Render the table
 function displayTerms(terms) {
   const tbody = document.querySelector("#term-table tbody");
   tbody.innerHTML = "";
@@ -46,27 +67,34 @@ function displayTerms(terms) {
   terms.forEach((term) => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td><a href="${term.uri}" target="_blank">${term.uri.split("/").pop()}</a></td>
+      <td>
+        <a href="${term.uri}" target="_blank">
+          ${term.uri.split("/").pop()}
+        </a>
+      </td>
       <td>${term.labels.join("<br>")}</td>
-      <td>${term.alternatives.join("<br>")}</td>
+      <td>${term.alts.join("<br>")}</td>
     `;
     tbody.appendChild(tr);
   });
 
+  // Wire up search
   document.getElementById("search").addEventListener("input", (e) => {
     const q = e.target.value.toLowerCase();
-    [...tbody.rows].forEach((row) => {
+    Array.from(tbody.rows).forEach((row) => {
       row.style.display = row.innerText.toLowerCase().includes(q) ? "" : "none";
     });
   });
 }
 
-function showMetadata() {
-  const lastModified = store.any(undefined, DCT("modified"));
-  if (lastModified) {
+// Show dataset metadata (e.g. last modified)
+function displayMetadata(store) {
+  const mod = store.any(undefined, DCT("modified"));
+  if (mod) {
     document.getElementById("dataset-meta").innerText =
-      "Vocabulary last modified: " + lastModified.value;
+      `Vocabulary last modified: ${mod.value}`;
   }
 }
 
-loadVocabulary();
+// Kick things off
+window.addEventListener("DOMContentLoaded", loadVocabulary);

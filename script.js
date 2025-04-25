@@ -2,98 +2,108 @@
 
 // Namespaces
 const SKOS = $rdf.Namespace("http://www.w3.org/2004/02/skos/core#");
-const DCT = $rdf.Namespace("http://purl.org/dc/terms/");
+const DCT  = $rdf.Namespace("http://purl.org/dc/terms/");
 
-// Compute the full URL to the TTL file on GitHub Pages
-const ttlPath = "data/DE-BIAS_vocabulary.ttl";
-const ttlUrl = new URL(ttlPath, window.location.href).href;
+// Build an absolute URL to the TTL on GitHub Pages
+const TTL_PATH = "data/DE-BIAS_vocabulary.ttl";
+const TTL_URL  = new URL(TTL_PATH, window.location.href).href;
 
-// Initialize an RDF store
+// RDF store
 const store = $rdf.graph();
 
-// Load, parse, extract, and display
+// Kick off on DOM ready
+window.addEventListener("DOMContentLoaded", loadVocabulary);
+
 async function loadVocabulary() {
   try {
-    // 1) Fetch the TTL file
-    const res = await fetch(ttlUrl);
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-
-    // 2) Read text
+    // 1) fetch the TTL
+    const res = await fetch(TTL_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     const ttlText = await res.text();
 
-    // 3) Parse into rdflib using absolute base URI
-    $rdf.parse(ttlText, store, ttlUrl, "text/turtle");
+    // 2) parse into rdflib
+    $rdf.parse(ttlText, store, TTL_URL, "text/turtle");
 
-    // 4) Extract and render
+    // 3) extract and render
     const terms = extractTerms(store);
     displayTerms(terms);
     displayMetadata(store);
 
   } catch (err) {
-    console.error("Error loading TTL:", err);
-    document.querySelector("main").innerHTML = `
-      <p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>
-    `;
+    console.error(err);
+    document.querySelector("main").innerHTML =
+      `<p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>`;
   }
 }
 
-// Build a map of concepts → labels + altLabels
+// Build a JS array of {uri, labels[], def[], alts[]}
 function extractTerms(store) {
   const map = new Map();
 
-  // preferred labels
-  store.statementsMatching(undefined, SKOS("prefLabel"), undefined)
+  // 1) labels via dct:title
+  store.statementsMatching(undefined, DCT("title"), undefined)
     .forEach(({ subject, object }) => {
-      const key = subject.value;
-      if (!map.has(key)) map.set(key, { uri: key, labels: [], alts: [] });
-      map.get(key).labels.push(`${object.value} [${object.lang}]`);
+      const uri = subject.value;
+      if (!map.has(uri)) map.set(uri, { uri, labels:[], defs:[], alts:[] });
+      map.get(uri).labels.push(`${object.value} [${object.lang}]`);
     });
 
-  // alternative labels
+  // 2) definitions via skos:definition + skos:scopeNote
+  [ SKOS("definition"), SKOS("scopeNote") ].forEach(pred => {
+    store.statementsMatching(undefined, pred, undefined)
+      .forEach(({ subject, object }) => {
+        const uri = subject.value;
+        if (map.has(uri)) {
+          map.get(uri).defs.push(`${object.value} [${object.lang||'und'}]`);
+        }
+      });
+  });
+
+  // 3) alternatives via skos:altLabel
   store.statementsMatching(undefined, SKOS("altLabel"), undefined)
     .forEach(({ subject, object }) => {
-      const key = subject.value;
-      if (map.has(key)) map.get(key).alts.push(`${object.value} [${object.lang}]`);
+      const uri = subject.value;
+      if (map.has(uri)) {
+        map.get(uri).alts.push(`${object.value} [${object.lang}]`);
+      }
     });
 
   return Array.from(map.values());
 }
 
-// Render the HTML table
+// Render table rows + wire up search
 function displayTerms(terms) {
   const tbody = document.querySelector("#term-table tbody");
   tbody.innerHTML = "";
-  terms.forEach(term => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
+  terms.forEach(t => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
       <td>
-        <a href="${term.uri}" target="_blank">
-          ${term.uri.split("/").pop()}
+        <a href="${t.uri}" target="_blank">
+          ${t.uri.split("/").pop()}
         </a>
       </td>
-      <td>${term.labels.join("<br>")}</td>
-      <td>${term.alts.join("<br>")}</td>
+      <td>${t.labels.join("<br>")}</td>
+      <td>${t.defs.join("<br>")}</td>
+      <td>${t.alts.join("<br>")}</td>
     `;
-    tbody.appendChild(tr);
+    tbody.appendChild(row);
   });
 
-  // Search filter
   document.getElementById("search").addEventListener("input", e => {
     const q = e.target.value.toLowerCase();
-    Array.from(tbody.rows).forEach(row => {
-      row.style.display = row.innerText.toLowerCase().includes(q) ? "" : "none";
+    Array.from(tbody.rows).forEach(r => {
+      r.style.display = r.innerText.toLowerCase().includes(q) ? "" : "none";
     });
   });
 }
 
-// Show dataset-level metadata (last modified date)
+// Display the first literal dct:modified as the dataset date
 function displayMetadata(store) {
-  const mod = store.any(undefined, DCT("modified"));
-  if (mod) {
+  const mods = store.statementsMatching(undefined, DCT("modified"), undefined)
+                    .filter(st => st.object.termType === "Literal");
+  if (mods.length) {
     document.getElementById("dataset-meta").innerText =
-      `Vocabulary last modified: ${mod.value}`;
+      `Vocabulary last modified: ${mods[0].object.value}`;
   }
 }
-
-// Run on page load
-window.addEventListener("DOMContentLoaded", loadVocabulary);

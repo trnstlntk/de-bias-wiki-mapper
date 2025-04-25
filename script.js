@@ -1,65 +1,69 @@
-const DATA_URL = 'https://op.europa.eu/o/opportal-service/euvoc-download-handler?cellarURI=http%3A%2F%2Fpublications.europa.eu%2Fresource%2Fdistribution%2Fde-bias-vocabulary%2F20250402-0%2Fttl%2Fskos_xl%2FDE-BIAS_vocabulary.ttl&fileName=DE-BIAS_vocabulary.ttl';
-const FALLBACK_KEY = 'debias-fallback';
+document.getElementById('download-btn').addEventListener('click', async function() {
+    // Update UI with a loading message
+    document.getElementById('status-msg').textContent = "Downloading the RDF file from GitHub... Please wait.";
 
-async function loadData() {
-  const store = $rdf.graph();
-  const fetcher = new $rdf.Fetcher(store);
+    try {
+        // GitHub link to download the RDF file
+        const githubUrl = 'https://raw.githubusercontent.com/trnstlntk/de-bias-wiki-mapper/main/data/DE-BIAS_vocabulary.ttl';
+        const response = await fetch(githubUrl);
+        if (!response.ok) {
+            throw new Error('Failed to download RDF file from GitHub');
+        }
 
-  const statusEl = document.getElementById('status');
+        const rdfData = await response.text();
 
-  try {
-    await fetcher.load(DATA_URL);
-    localStorage.setItem(FALLBACK_KEY, store.toNT());
-    const now = new Date().toLocaleString();
-    statusEl.innerText = `✅ Live data loaded successfully (${now})`;
-    displayData(store);
-  } catch (error) {
-    statusEl.innerHTML = `⚠️ Failed to load live data. Using cached fallback.`;
+        // Create a Blob from the RDF file content
+        const blob = new Blob([rdfData], { type: 'application/rdf+xml' });
 
-    const cached = localStorage.getItem(FALLBACK_KEY);
-    if (cached) {
-      const parser = new $rdf.N3Parser($rdf.graph());
-      parser.parse(cached, store, DATA_URL, 'text/turtle');
-      displayData(store);
-    } else {
-      statusEl.innerText += ' No cached version available.';
+        // Create a download link for the file
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'DE-BIAS_vocabulary.ttl';  // The name for the downloaded file
+
+        // Trigger the download by simulating a click on the link
+        link.click();
+
+        // Update UI with success message
+        document.getElementById('status-msg').textContent = "Download complete!";
+
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        document.getElementById('status-msg').textContent = "Something went wrong. Please try again later.";
     }
-  }
-}
+});
 
-function displayData(store) {
-  const ns = $rdf.Namespace('http://www.w3.org/2004/02/skos/core#');
-  const concepts = store.subjects(ns('prefLabel'), null);
+document.getElementById('download-upload-btn').addEventListener('click', async function() {
+    // Update UI with a loading message
+    document.getElementById('status-msg').textContent = "Downloading the RDF file... Please wait.";
 
-  const tbody = document.querySelector('#term-table tbody');
-  tbody.innerHTML = '';
+    try {
+        // The URL for the RDF file
+        const fileURL = 'https://op.europa.eu/o/opportal-service/euvoc-download-handler?cellarURI=http%3A%2F%2Fpublications.europa.eu%2Fresource%2Fdistribution%2Fde-bias-vocabulary%2F20250402-0%2Frdf%2Fskos_xl%2FDE-BIAS_vocabulary.rdf&fileName=DE-BIAS_vocabulary.rdf';
 
-  concepts.forEach((concept) => {
-    const label = store.any(concept, ns('prefLabel'));
-    const lang = label.lang || '—';
-    const altLabels = store.each(concept, ns('altLabel')).map(lit => lit.value).join('; ');
-    const def = store.any(concept, ns('definition'))?.value || '';
-    const uri = concept.value;
+        // Fetch the RDF file
+        const response = await fetch(fileURL);
+        if (!response.ok) {
+            throw new Error('Failed to download RDF file');
+        }
 
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${label.value}</td>
-      <td>${lang}</td>
-      <td>${altLabels}</td>
-      <td>${def}</td>
-      <td><a href="${uri}" target="_blank">Link</a></td>
-    `;
-    tbody.appendChild(tr);
-  });
+        const rdfData = await response.text();
 
-  // search
-  document.getElementById('search').addEventListener('input', function () {
-    const term = this.value.toLowerCase();
-    Array.from(tbody.children).forEach(row => {
-      const text = row.innerText.toLowerCase();
-      row.style.display = text.includes(term) ? '' : 'none';
-    });
-  });
-}
+        // Create a Blob from the RDF file content
+        const blob = new Blob([rdfData], { type: 'application/rdf+xml' });
 
-window.onload = loadData;
+        // Create a download link for the file
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'DE-BIAS_vocabulary.rdf';  // The name for the downloaded file
+
+        // Trigger the download by simulating a click on the link
+        link.click();
+
+        // Update UI with success message and instructions
+        document.getElementById('status-msg').innerHTML = `Download complete! Now, <a href="https://github.com/trnstlntk/de-bias-wiki-mapper" target="_blank">upload the file to your GitHub repository here</a> using the "Add file" button.`;
+
+    } catch (error) {
+        console.error('Error downloading file:', error);
+        document.getElementById('status-msg').textContent = "Something went wrong. Please try again later.";
+    }
+});

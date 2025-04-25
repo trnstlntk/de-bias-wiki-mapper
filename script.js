@@ -4,67 +4,66 @@
 const SKOS = $rdf.Namespace("http://www.w3.org/2004/02/skos/core#");
 const DCT = $rdf.Namespace("http://purl.org/dc/terms/");
 
-// Where we find the TTL
-const ttlUrl = "data/DE-BIAS_vocabulary.ttl";
+// Compute the full URL to the TTL file on GitHub Pages
+const ttlPath = "data/DE-BIAS_vocabulary.ttl";
+const ttlUrl = new URL(ttlPath, window.location.href).href;
 
-// RDF store
+// Initialize an RDF store
 const store = $rdf.graph();
 
-// Main loader
+// Load, parse, extract, and display
 async function loadVocabulary() {
   try {
-    // 1) Fetch the TTL file via standard fetch()
-    const resp = await fetch(ttlUrl);
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    // 1) Fetch the TTL file
+    const res = await fetch(ttlUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
 
-    const ttlText = await resp.text();
+    // 2) Read text
+    const ttlText = await res.text();
 
-    // 2) Parse it into our rdflib store
+    // 3) Parse into rdflib using absolute base URI
     $rdf.parse(ttlText, store, ttlUrl, "text/turtle");
 
-    // 3) Extract and display
+    // 4) Extract and render
     const terms = extractTerms(store);
     displayTerms(terms);
     displayMetadata(store);
 
   } catch (err) {
     console.error("Error loading TTL:", err);
-    document.querySelector("main").innerHTML =
-      `<p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>`;
+    document.querySelector("main").innerHTML = `
+      <p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>
+    `;
   }
 }
 
-// Pull all prefLabel + altLabel into a JS array
+// Build a map of concepts → labels + altLabels
 function extractTerms(store) {
-  const termMap = new Map();
+  const map = new Map();
 
-  // Gather preferred labels
+  // preferred labels
   store.statementsMatching(undefined, SKOS("prefLabel"), undefined)
     .forEach(({ subject, object }) => {
       const key = subject.value;
-      if (!termMap.has(key)) termMap.set(key, { uri: key, labels: [], alts: [] });
-      termMap.get(key).labels.push(`${object.value} [${object.lang}]`);
+      if (!map.has(key)) map.set(key, { uri: key, labels: [], alts: [] });
+      map.get(key).labels.push(`${object.value} [${object.lang}]`);
     });
 
-  // Gather alternative labels
+  // alternative labels
   store.statementsMatching(undefined, SKOS("altLabel"), undefined)
     .forEach(({ subject, object }) => {
       const key = subject.value;
-      if (termMap.has(key)) {
-        termMap.get(key).alts.push(`${object.value} [${object.lang}]`);
-      }
+      if (map.has(key)) map.get(key).alts.push(`${object.value} [${object.lang}]`);
     });
 
-  // Convert to array
-  return Array.from(termMap.values());
+  return Array.from(map.values());
 }
 
-// Render the table
+// Render the HTML table
 function displayTerms(terms) {
   const tbody = document.querySelector("#term-table tbody");
   tbody.innerHTML = "";
-
-  terms.forEach((term) => {
+  terms.forEach(term => {
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>
@@ -78,16 +77,16 @@ function displayTerms(terms) {
     tbody.appendChild(tr);
   });
 
-  // Wire up search
-  document.getElementById("search").addEventListener("input", (e) => {
+  // Search filter
+  document.getElementById("search").addEventListener("input", e => {
     const q = e.target.value.toLowerCase();
-    Array.from(tbody.rows).forEach((row) => {
+    Array.from(tbody.rows).forEach(row => {
       row.style.display = row.innerText.toLowerCase().includes(q) ? "" : "none";
     });
   });
 }
 
-// Show dataset metadata (e.g. last modified)
+// Show dataset-level metadata (last modified date)
 function displayMetadata(store) {
   const mod = store.any(undefined, DCT("modified"));
   if (mod) {
@@ -96,5 +95,5 @@ function displayMetadata(store) {
   }
 }
 
-// Kick things off
+// Run on page load
 window.addEventListener("DOMContentLoaded", loadVocabulary);

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DE-BIAS Wiki Mapper</title>
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://unpkg.com/rdflib@2.2.0/dist/rdflib.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>DE-BIAS Wiki Mapper</h1>
+    <p>Explore contested terms across multiple languages, based on the DE-BIAS vocabulary.</p>
+    <div id="dataset-meta"></div>
+  </header>
+
+  <main>
+    <input type="text" id="search" placeholder="Search terms..." />
+
+    <table id="term-table">
+      <thead>
+        <tr>
+          <th>Concept URI</th>
+          <th>Labels</th>
+          <th>Alternatives</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <footer>
+    <p>
+      Tool by <a href="https://github.com/trnstlntk">trnstlntk</a> | View source on
+      <a href="https://github.com/trnstlntk/de-bias-wiki-mapper">GitHub</a>
+    </p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>DE-BIAS Wiki Mapper</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>DE-BIAS Wiki Mapper</h1>
+    <p>Live data viewer for the DE-BIAS vocabulary</p>
+    <div id="status"></div>
+  </header>
+
+  <main>
+    <input type="text" id="search" placeholder="Search terms..." />
+    <table id="term-table">
+      <thead>
+        <tr>
+          <th>Label</th>
+          <th>Language</th>
+          <th>Alt Labels</th>
+          <th>Definition</th>
+          <th>URI</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </main>
+
+  <script src="https://unpkg.com/rdflib/dist/rdflib.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

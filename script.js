@@ -1,122 +1,112 @@
 // script.js
+import { Parser } from 'https://cdn.jsdelivr.net/npm/n3@1.15.0/+esm';
 
-// RDF Namespaces
-const RDF    = $rdf.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
-const SKOS   = $rdf.Namespace("http://www.w3.org/2004/02/skos/core#");
-const DCT    = $rdf.Namespace("http://purl.org/dc/terms/");
-const DEBIAS = $rdf.Namespace("http://data.europa.eu/c4p/ontology#");
+const TTL_URL = new URL('data/DE-BIAS_vocabulary.ttl', window.location.href).href;
 
-// Compute absolute URL to your TTL in /data/
-const TTL_URL = new URL("data/DE-BIAS_vocabulary.ttl", window.location.href).href;
+// Predicates we care about
+const NS = {
+  type:        'http://www.w3.org/1999/02/22-rdf-syntax-ns#type',
+  title:       'http://purl.org/dc/terms/title',
+  desc:        'http://purl.org/dc/terms/description',
+  hasTerm:     'http://data.europa.eu/c4p/ontology#hasContentiousTerm',
+  hasSuggest:  'http://data.europa.eu/c4p/ontology#hasSuggestedTerm',
+  concept:     'http://www.w3.org/2004/02/skos/core#Concept'
+};
 
-// Single shared rdflib store
-const store = $rdf.graph();
+// Helper: group by key
+function groupBy(arr, keyFn) {
+  return arr.reduce((m, item) => {
+    const key = keyFn(item);
+    (m[key] || (m[key] = [])).push(item);
+    return m;
+  }, {});
+}
 
-// When the page loads, kick off our loader
-window.addEventListener("DOMContentLoaded", async () => {
-  try {
-    // 1) Fetch & parse the entire vocabulary TTL
-    const res   = await fetch(TTL_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    const ttl   = await res.text();
-    $rdf.parse(ttl, store, TTL_URL, "text/turtle");
+async function main() {
+  // 1) Fetch TTL text
+  const resp = await fetch(TTL_URL);
+  if (!resp.ok) throw new Error(`Failed to fetch TTL: ${resp.status}`);
+  const ttl = await resp.text();
 
-    // 2) Extract your term concepts
-    const terms = extractTermConcepts(store);
+  // 2) Parse into triples
+  const parser = new Parser({ format: 'text/turtle' });
+  const triples = parser.parse(ttl);
 
-    // 3) Render the table & metadata, then activate DataTables
-    renderTable(terms);
-    renderMetadata(store);
-    $("#term-table").DataTable();
+  // 3) Index triples by subject
+  const bySubject = groupBy(triples, t => t.subject.id);
 
-  } catch (err) {
-    console.error(err);
-    document.querySelector("main").innerHTML = `
-      <p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>
-    `;
-  }
-});
+  // 4) Find all real term subjects:
+  //    those that appear as subject in a hasContentiousTerm triple
+  const realTerms = new Set(
+    triples
+      .filter(t => t.predicate.id === NS.hasTerm)
+      .map(t => t.subject.id)
+  );
 
-/**
- * Pulls out only those URIs that are real DE-BIAS terms
- * (i.e. have the debias-o:hasContentiousTerm predicate),
- * then gathers labels, languages, description, and suggestion labels.
- */
-function extractTermConcepts(store) {
-  // 1) find all subjects with hasContentiousTerm → these are our term concepts
-  const subjects = store
-    .each(undefined, DEBIAS("hasContentiousTerm"), null)
-    .map(st => st.subject.value);
-
-  // 2) de-duplicate and build a JS object per concept
-  return Array.from(new Set(subjects)).map(uri => {
-    const node = $rdf.sym(uri);
-
-    // a) Labels (dct:title)
-    const labels = store
-      .each(node, DCT("title"), null)
-      .map(lit => ({ value: lit.value, lang: lit.lang }));
-    const langs = [...new Set(labels.map(l => l.lang).filter(Boolean))];
-
-    // b) Description (dct:description)
-    const descLit = store.any(node, DCT("description"), null);
-    const description = descLit && descLit.value
-      ? descLit.value
-      : "";
-
-    // c) Suggested Terms: follow hasSuggestedTerm → each suggestion node is already in this same store
-    const suggested = store
-      .each(node, DEBIAS("hasSuggestedTerm"), null)
-      .map(lit => {
-        // look up its dct:title in the same store
-        const sNode = $rdf.sym(lit.value);
-        const titleLit = store.any(sNode, DCT("title"), null);
-        return (titleLit && titleLit.value)
-          ? titleLit.value
-          : lit.value.split("/").pop();
-      });
+  // 5) Build concept objects
+  const concepts = Array.from(realTerms).map(uri => {
+    const ts = bySubject[uri] || [];
+    // Labels: all dct:title
+    const labels = ts
+      .filter(t => t.predicate.id === NS.title)
+      .map(t => ({ value: t.object.value, lang: t.object.language }));
+    // Languages present:
+    const langs = Array.from(new Set(labels.map(l => l.lang).filter(Boolean)));
+    // Description: first dct:description
+    const descTriple = ts.find(t => t.predicate.id === NS.desc);
+    const description = descTriple ? descTriple.object.value : '';
+    // Suggested URIs & labels: 
+    const sugUris = ts
+      .filter(t => t.predicate.id === NS.hasSuggest)
+      .map(t => t.object.id);
+    const suggested = sugUris.map(su => {
+      const sugTriples = bySubject[su]||[];
+      const titleT = sugTriples.find(t => t.predicate.id === NS.title);
+      return titleT ? titleT.object.value : su.split('/').pop();
+    });
 
     return {
-      id: uri.split("/").pop(),
-      labels,
-      langs,
-      description,
-      suggested
+      id: uri.split('/').pop(),
+      labels, langs, description, suggested
     };
   });
-}
 
-/**
- * Renders the DataTable rows for each concept.
- */
-function renderTable(concepts) {
-  const tbody = document.querySelector("#term-table tbody");
-  tbody.innerHTML = "";
+  // 6) Render metadata
+  //    Look for a global dct:modified triple on the scheme node
+  const metaTriple = triples.find(t => t.predicate.id === 'http://purl.org/dc/terms/modified'
+                                     && t.object.termType === 'Literal');
+  if (metaTriple) {
+    document.getElementById('dataset-meta').innerText =
+      `Vocabulary last modified: ${metaTriple.object.value}`;
+  } else {
+    document.getElementById('dataset-meta').innerText = '';
+  }
 
-  concepts.forEach(c => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>
-        <a href="http://data.europa.eu/c4p/data/${c.id}" target="_blank">
-          ${c.id}
-        </a>
-      </td>
-      <td>${c.langs.join(", ")}</td>
-      <td>${c.labels.map(l => l.value).join("<br>")}</td>
-      <td>${c.description || "<em>– no description –</em>"}</td>
-      <td>${c.suggested.length ? c.suggested.join("<br>") : "<em>– none –</em>"}</td>
-    `;
-    tbody.appendChild(tr);
+  // 7) Render table
+  const tbody = document.querySelector('#term-table tbody');
+  tbody.innerHTML = concepts.map(c => `
+    <tr>
+      <td><a href="http://data.europa.eu/c4p/data/${c.id}" target="_blank">${c.id}</a></td>
+      <td>${c.langs.join(', ')}</td>
+      <td>${c.labels.map(l=>l.value).join('<br>')}</td>
+      <td>${c.description || '<em>–</em>'}</td>
+      <td>${c.suggested.length 
+             ? c.suggested.join('<br>') 
+             : '<em>–</em>'}</td>
+    </tr>
+  `).join('');
+
+  // 8) Activate DataTables
+  $(document).ready(() => {
+    $('#term-table').DataTable({
+      pageLength: 25
+    });
   });
 }
 
-/**
- * Displays the dataset's "last modified" date from dct:modified.
- */
-function renderMetadata(store) {
-  const modLit = store.any(undefined, DCT("modified"), null);
-  if (modLit && modLit.value) {
-    document.getElementById("dataset-meta").innerText =
-      `Vocabulary last modified: ${modLit.value}`;
-  }
-}
+// Kick off
+main().catch(err => {
+  console.error(err);
+  document.querySelector('main').innerHTML = 
+    `<p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>`;
+});

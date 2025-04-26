@@ -1,3 +1,4 @@
+/* Base page styling */
 body {
   font-family: Arial, sans-serif;
   margin: 0;
@@ -5,37 +6,41 @@ body {
   background: #f9f9f9;
   color: #222;
 }
-
 header, footer {
   background-color: #4caf50;
   color: white;
   padding: 1em;
   text-align: center;
 }
-
 main {
   padding: 1em;
 }
-
-input[type="text"] {
-  width: 100%;
-  padding: 0.5em;
-  font-size: 1em;
+#lang-filter {
   margin-bottom: 1em;
 }
 
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: white;
+/* Introductory context box */
+.intro-box {
+  background-color: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 1em 1.5em;
+  margin: 1em 0 2em;
+}
+.intro-box p {
+  margin: 0.5em 0;
+  line-height: 1.4;
+}
+.intro-box a {
+  color: #336699;
+  text-decoration: none;
+}
+.intro-box a:hover {
+  text-decoration: underline;
+}
+.intro-box strong {
+  color: #cc0000;
 }
 
-th, td {
-  border: 1px solid #ccc;
-  padding: 0.5em;
-  vertical-align: top;
-}
-
-th {
-  background-color: #eee;
-}
+/* Optional: style footnotes or small text if needed */
+/* .intro-box em { font-style: italic; } */

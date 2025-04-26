@@ -4,7 +4,7 @@ import { Parser } from 'https://cdn.jsdelivr.net/npm/n3@1.15.0/+esm';
 
 const TTL_URL = new URL('data/DE-BIAS_vocabulary.ttl', window.location.href).href;
 
-// Predicate IRIs
+// Predicates to extract
 const NS = {
   title:       'http://purl.org/dc/terms/title',
   desc:        'http://purl.org/dc/terms/description',
@@ -14,6 +14,7 @@ const NS = {
   literalForm: 'http://www.w3.org/2008/05/skos-xl#literalForm'
 };
 
+// Group triples by a key function
 function groupBy(arr, fn) {
   return arr.reduce((map, item) => {
     const key = fn(item);
@@ -23,38 +24,38 @@ function groupBy(arr, fn) {
 }
 
 async function main() {
-  // 1) Fetch & parse TTL
+  // 1) Fetch & parse the TTL file
   const resp     = await fetch(TTL_URL);
   if (!resp.ok) throw new Error(`Failed to load TTL (${resp.status})`);
   const text     = await resp.text();
   const parser   = new Parser({ format: 'text/turtle' });
   const triples  = parser.parse(text);
 
-  // 2) Index triples by subject
+  // 2) Index triples by subject URI
   const bySubj = groupBy(triples, t => t.subject.id);
 
-  // 3) Identify real term URIs
+  // 3) Identify only real term URIs
   const termUris = new Set(
     triples
       .filter(t => t.predicate.id === NS.hasTerm)
       .map(t => t.subject.id)
   );
 
-  // 4) Build concept objects
+  // 4) Build our concept objects
   const concepts = Array.from(termUris).map(uri => {
     const ts = bySubj[uri] || [];
 
-    // Labels & languages
+    // Labels and languages
     const labels = ts
       .filter(t => t.predicate.id === NS.title)
       .map(t => ({ value: t.object.value, lang: t.object.language }));
-    const langs  = [...new Set(labels.map(l => l.lang))];
+    const langs = Array.from(new Set(labels.map(l => l.lang)));
 
     // Description
     const descT      = ts.find(t => t.predicate.id === NS.desc);
     const description = descT ? descT.object.value : '';
 
-    // Suggested Terms
+    // Suggested terms
     const sugUris = ts
       .filter(t => t.predicate.id === NS.hasSuggest)
       .map(t => t.object.id);
@@ -70,7 +71,7 @@ async function main() {
     return { id: uri, labels, langs, description, suggested };
   });
 
-  // 5) Render language filters dynamically
+  // 5) Inject dynamic language filters
   const allLangs = Array.from(new Set(concepts.flatMap(c => c.langs))).sort();
   const labelMap = {
     en: 'English', de: 'Deutsch', nl: 'Nederlands',
@@ -86,7 +87,7 @@ async function main() {
     `);
   });
 
-  // 6) Populate table
+  // 6) Populate the table
   const $table = $('#term-table');
   const $tbody = $table.find('tbody').empty();
   concepts.forEach(c => {
@@ -103,7 +104,7 @@ async function main() {
     `);
   });
 
-  // 7) Show last modified
+  // 7) Show last modified date
   const modT = triples.find(t =>
     t.predicate.id === NS.modified &&
     t.object.termType === 'Literal'
@@ -114,13 +115,10 @@ async function main() {
     $('#dataset-meta').empty();
   }
 
-  // 8) Initialize DataTable with lengthMenu and CSV button
+  // 8) Initialize DataTables with lengthMenu, sorting, CSV button
   const dt = $table.DataTable({
-    dom: 'lBfrtip',               // 'l' adds the length selector
-    lengthMenu: [
-      [10, 25, 100, -1],
-      [10, 25, 100, 'All']
-    ],
+    dom: 'lBfrtip', // l = lengthMenu, B = buttons, f = filter, r = processing, t = table, i = info, p = paging
+    lengthMenu: [[10, 25, 100, -1], [10, 25, 100, 'All']],
     pageLength: 25,
     order: [[1, 'asc'], [2, 'asc']],
     buttons: [{
@@ -130,8 +128,8 @@ async function main() {
       exportOptions: {
         columns: ':visible',
         format: {
-          body: (data, row, column, node) => {
-            if (column === 0) {
+          body: (data, row, col, node) => {
+            if (col === 0) {
               return $('a', node).attr('href');
             }
             return data.replace(/<br\s*\/?>/g, ' ; ');
@@ -141,11 +139,11 @@ async function main() {
     }]
   });
 
-  // 9) Language-filter logic
+  // 9) Apply language-filter logic
   $('#lang-filter input[type=checkbox]').on('change', () => {
     const selected = $('#lang-filter input:checked')
       .map((_, el) => el.value).get();
-    $.fn.dataTable.ext.search.push((_, rowData) =>
+    $.fn.dataTable.ext.search.push((_, rowData) => 
       selected.some(l => rowData[1].split(', ').includes(l))
     );
     dt.draw();

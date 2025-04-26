@@ -4,31 +4,48 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>DE-BIAS Wiki Mapper</title>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"/>
   <link rel="stylesheet" href="style.css" />
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
   <script src="https://unpkg.com/rdflib@2.2.0/dist/rdflib.min.js"></script>
+  <script src="https://unpkg.com/tabby/dist/js/tabby.polyfills.min.js"></script>
 </head>
 <body>
   <header>
     <h1>DE-BIAS Wiki Mapper</h1>
-    <p>Browse DE-BIAS concepts in all available languages.</p>
     <div id="dataset-meta"></div>
+    <!-- Language tabs -->
+    <nav class="tabs" data-tabs>
+      <a href="#all" class="tab-link">All</a>
+      <a href="#en" class="tab-link">English</a>
+      <a href="#de" class="tab-link">Deutsch</a>
+      <a href="#nl" class="tab-link">Nederlands</a>
+      <a href="#es" class="tab-link">Español</a>
+    </nav>
   </header>
 
   <main>
-    <input type="text" id="search" placeholder="Search terms…" />
-
-    <table id="term-table">
-      <thead>
-        <tr>
-          <th>Concept</th>
-          <th>Languages</th>
-          <th>Labels</th>
-          <th>Definition</th>
-          <th>Alternatives</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <!-- Table container -->
+    <section id="all" class="tab-content">
+      <table id="term-table-all" class="display" style="width:100%">
+        <thead>
+          <tr>
+            <th>Concept</th>
+            <th>Languages</th>
+            <th>Labels</th>
+            <th>Definitions</th>
+            <th>Suggestions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+    <!-- Language-specific tables (empty, filled dynamically) -->
+    <section id="en" class="tab-content"><table id="term-table-en" class="display"><thead><tr><th>Concept</th><th>Labels</th><th>Definitions</th><th>Suggestions</th></tr></thead><tbody></tbody></table></section>
+    <section id="de" class="tab-content"><table id="term-table-de" class="display"><thead><tr><th>Concept</th><th>Labels</th><th>Definitions</th><th>Suggestions</th></tr></thead><tbody></tbody></table></section>
+    <section id="nl" class="tab-content"><table id="term-table-nl" class="display"><thead><tr><th>Concept</th><th>Labels</th><th>Definitions</th><th>Suggestions</th></tr></thead><tbody></tbody></table></section>
+    <section id="es" class="tab-content"><table id="term-table-es" class="display"><thead><tr><th>Concept</th><th>Labels</th><th>Definitions</th><th>Suggestions</th></tr></thead><tbody></tbody></table></section>
   </main>
 
   <footer>
@@ -37,7 +54,6 @@
       <a href="https://github.com/trnstlntk/de-bias-wiki-mapper">Source on GitHub</a>
     </p>
   </footer>
-
   <script src="script.js"></script>
 </body>
 </html>

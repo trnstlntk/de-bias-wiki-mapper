@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport"
-        content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>DE-BIAS Wiki Mapper</title>
+  <!-- DataTables CSS -->
   <link rel="stylesheet"
         href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"/>
+  <!-- Your custom styles -->
   <link rel="stylesheet" href="style.css"/>
+  <!-- jQuery & DataTables script -->
   <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
   <script
     src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
@@ -17,6 +19,7 @@
     <h1>DE-BIAS Wiki Mapper</h1>
     <div id="dataset-meta">Loading…</div>
   </header>
+
   <main>
     <table id="term-table" class="display" style="width:100%">
       <thead>
@@ -31,13 +34,15 @@
       <tbody></tbody>
     </table>
   </main>
+
   <footer>
     <p>
       Built by <a href="https://github.com/trnstlntk">trnstlntk</a> |
       <a href="https://github.com/trnstlntk/de-bias-wiki-mapper">Source</a>
     </p>
   </footer>
-  <!-- load the parser-and-renderer after the DOM -->
+
+  <!-- Finally load your parser + renderer -->
   <script type="module" src="script.js"></script>
 </body>
 </html>

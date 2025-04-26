@@ -2,24 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1"/>
   <title>DE-BIAS Wiki Mapper</title>
-  <link
-    rel="stylesheet"
-    href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"/>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet"
+        href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"/>
+  <link rel="stylesheet" href="style.css"/>
   <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
   <script
     src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
-  <!-- N3.js ES module build -->
-  <script type="module" src="script.js"></script>
 </head>
 <body>
   <header>
     <h1>DE-BIAS Wiki Mapper</h1>
     <div id="dataset-meta">Loading…</div>
   </header>
-
   <main>
     <table id="term-table" class="display" style="width:100%">
       <thead>
@@ -34,12 +31,13 @@
       <tbody></tbody>
     </table>
   </main>
-
   <footer>
     <p>
       Built by <a href="https://github.com/trnstlntk">trnstlntk</a> |
       <a href="https://github.com/trnstlntk/de-bias-wiki-mapper">Source</a>
     </p>
   </footer>
+  <!-- load the parser-and-renderer after the DOM -->
+  <script type="module" src="script.js"></script>
 </body>
 </html>

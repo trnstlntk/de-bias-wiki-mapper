@@ -14,7 +14,6 @@ const NS = {
   literalForm: 'http://www.w3.org/2008/05/skos-xl#literalForm'
 };
 
-// Helper: group triples by subject
 function groupBy(arr, fn) {
   return arr.reduce((map, item) => {
     const key = fn(item);
@@ -24,7 +23,7 @@ function groupBy(arr, fn) {
 }
 
 async function main() {
-  // 1) Load & parse TTL
+  // 1) Fetch & parse TTL
   const resp     = await fetch(TTL_URL);
   if (!resp.ok) throw new Error(`Failed to load TTL (${resp.status})`);
   const text     = await resp.text();
@@ -52,7 +51,7 @@ async function main() {
     const langs  = [...new Set(labels.map(l => l.lang))];
 
     // Description
-    const descT = ts.find(t => t.predicate.id === NS.desc);
+    const descT      = ts.find(t => t.predicate.id === NS.desc);
     const description = descT ? descT.object.value : '';
 
     // Suggested Terms
@@ -63,7 +62,7 @@ async function main() {
       const sTs = bySubj[su] || [];
       const lf  = sTs.find(t => t.predicate.id === NS.literalForm);
       if (lf) return lf.object.value;
-      const tt = sTs.find(t => t.predicate.id === NS.title);
+      const tt  = sTs.find(t => t.predicate.id === NS.title);
       if (tt) return tt.object.value;
       return su.split('/').pop();
     });
@@ -71,10 +70,13 @@ async function main() {
     return { id: uri, labels, langs, description, suggested };
   });
 
-  // 5) Render dynamic language filters
+  // 5) Render language filters dynamically
   const allLangs = Array.from(new Set(concepts.flatMap(c => c.langs))).sort();
-  const labelMap = { en:'English', de:'Deutsch', nl:'Nederlands', es:'Español', it:'Italiano' };
-  const $filter  = $('#lang-filter');
+  const labelMap = {
+    en: 'English', de: 'Deutsch', nl: 'Nederlands',
+    es: 'Español', it: 'Italiano', fr: 'Français'
+  };
+  const $filter = $('#lang-filter');
   allLangs.forEach(lang => {
     const name = labelMap[lang] || lang;
     $filter.append(`
@@ -92,16 +94,16 @@ async function main() {
       <tr>
         <td><a href="${c.id}" target="_blank">${c.id}</a></td>
         <td>${c.langs.join(', ')}</td>
-        <td>${c.labels.map(l=>l.value).join('<br>')}</td>
+        <td>${c.labels.map(l => l.value).join('<br>')}</td>
         <td>${c.description || '<em>–</em>'}</td>
-        <td>${c.suggested.length 
-               ? c.suggested.join('<br>') 
+        <td>${c.suggested.length
+               ? c.suggested.join('<br>')
                : '<em>–</em>'}</td>
       </tr>
     `);
   });
 
-  // 7) Metadata
+  // 7) Show last modified
   const modT = triples.find(t =>
     t.predicate.id === NS.modified &&
     t.object.termType === 'Literal'
@@ -112,13 +114,15 @@ async function main() {
     $('#dataset-meta').empty();
   }
 
-  // 8) Initialize DataTable with lengthMenu & CSV button
+  // 8) Initialize DataTable with lengthMenu and CSV button
   const dt = $table.DataTable({
-    order: [[1,'asc'],[2,'asc']],               // sort by Language, then Label
-    dom: 'Bfrtip',                              // Buttons, filter, table
-    lengthMenu: [[10, 25, 100, -1],             // values :contentReference[oaicite:5]{index=5}
-                 [10, 25, 100, 'All']],         // display labels :contentReference[oaicite:6]{index=6}
-    pageLength: 25,                             // default rows visible
+    dom: 'lBfrtip',               // 'l' adds the length selector
+    lengthMenu: [
+      [10, 25, 100, -1],
+      [10, 25, 100, 'All']
+    ],
+    pageLength: 25,
+    order: [[1, 'asc'], [2, 'asc']],
     buttons: [{
       extend: 'csvHtml5',
       text: 'Download current selection as CSV',
@@ -137,13 +141,13 @@ async function main() {
     }]
   });
 
-  // 9) Language filter behavior
+  // 9) Language-filter logic
   $('#lang-filter input[type=checkbox]').on('change', () => {
     const selected = $('#lang-filter input:checked')
-      .map((_,el) => el.value).get();
-    $.fn.dataTable.ext.search.push((_, rowData) => {
-      return selected.some(l => rowData[1].split(', ').includes(l));
-    });
+      .map((_, el) => el.value).get();
+    $.fn.dataTable.ext.search.push((_, rowData) =>
+      selected.some(l => rowData[1].split(', ').includes(l))
+    );
     dt.draw();
     $.fn.dataTable.ext.search.pop();
   });

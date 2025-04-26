@@ -33,12 +33,35 @@
   </header>
 
   <main>
-    <!-- Language filter checkboxes -->
+    <!-- Introduction box with project context & warning -->
+    <div class="intro-box">
+      <p>
+        DE-BIAS is a project supported by
+        <a href="https://pro.europeana.eu/page/the-de-bias-vocabulary"
+           target="_blank" rel="noopener">
+          Europeana’s DE-BIAS Vocabulary
+        </a>
+        to promote inclusive and respectful language in cultural heritage and Wikimedia content.
+        It provides a controlled list of outdated or potentially offensive terms (around 700 terms
+        across multiple languages) so users can understand why they’re problematic and find better
+        alternatives.
+      </p>
+      <p>
+        <strong>Content Warning:</strong> The table below contains historical and contemporary terms
+        that may be offensive or derogatory. They are presented <em>for reference and analysis only</em>—
+        to help identify bias and improve content—and <em>not</em> to endorse their use.
+      </p>
+      <p>
+        Use the search, filters, sorting controls, and CSV download below to explore and analyze these terms.
+      </p>
+    </div>
+
+    <!-- Dynamic language filters -->
     <div id="lang-filter">
       <strong>Filter by language:</strong>
     </div>
 
-    <!-- DataTable -->
+    <!-- Interactive DataTable -->
     <table id="term-table" class="display stripe" style="width:100%">
       <thead>
         <tr>

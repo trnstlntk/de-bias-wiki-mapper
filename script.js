@@ -2,10 +2,9 @@
 
 import { Parser } from 'https://cdn.jsdelivr.net/npm/n3@1.15.0/+esm';
 
-// TTL location
 const TTL_URL = new URL('data/DE-BIAS_vocabulary.ttl', window.location.href).href;
 
-// Predicates we need
+// Predicate IRIs
 const NS = {
   title:       'http://purl.org/dc/terms/title',
   desc:        'http://purl.org/dc/terms/description',
@@ -15,7 +14,7 @@ const NS = {
   literalForm: 'http://www.w3.org/2008/05/skos-xl#literalForm'
 };
 
-// Simple grouping helper
+// Helper: group triples by subject
 function groupBy(arr, fn) {
   return arr.reduce((map, item) => {
     const key = fn(item);
@@ -25,16 +24,17 @@ function groupBy(arr, fn) {
 }
 
 async function main() {
-  // 1) Fetch & parse TTL
-  const res     = await fetch(TTL_URL);
-  const ttlText = await res.text();
-  const parser  = new Parser({ format: 'text/turtle' });
-  const triples = parser.parse(ttlText);
+  // 1) Load & parse TTL
+  const resp     = await fetch(TTL_URL);
+  if (!resp.ok) throw new Error(`Failed to load TTL (${resp.status})`);
+  const text     = await resp.text();
+  const parser   = new Parser({ format: 'text/turtle' });
+  const triples  = parser.parse(text);
 
-  // 2) Group triples by subject URI
+  // 2) Index triples by subject
   const bySubj = groupBy(triples, t => t.subject.id);
 
-  // 3) Identify real term URIs (hasContentiousTerm)
+  // 3) Identify real term URIs
   const termUris = new Set(
     triples
       .filter(t => t.predicate.id === NS.hasTerm)
@@ -45,43 +45,52 @@ async function main() {
   const concepts = Array.from(termUris).map(uri => {
     const ts = bySubj[uri] || [];
 
-    // Labels & langs
+    // Labels & languages
     const labels = ts
       .filter(t => t.predicate.id === NS.title)
       .map(t => ({ value: t.object.value, lang: t.object.language }));
     const langs  = [...new Set(labels.map(l => l.lang))];
 
     // Description
-    const descT   = ts.find(t => t.predicate.id === NS.desc);
-    const desc    = descT ? descT.object.value : '';
+    const descT = ts.find(t => t.predicate.id === NS.desc);
+    const description = descT ? descT.object.value : '';
 
-    // Suggested Terms: literalForm -> title -> fallback
+    // Suggested Terms
     const sugUris = ts
       .filter(t => t.predicate.id === NS.hasSuggest)
       .map(t => t.object.id);
     const suggested = sugUris.map(su => {
-      const sTs  = bySubj[su] || [];
-      const lf   = sTs.find(t => t.predicate.id === NS.literalForm);
+      const sTs = bySubj[su] || [];
+      const lf  = sTs.find(t => t.predicate.id === NS.literalForm);
       if (lf) return lf.object.value;
-      const tt   = sTs.find(t => t.predicate.id === NS.title);
+      const tt = sTs.find(t => t.predicate.id === NS.title);
       if (tt) return tt.object.value;
       return su.split('/').pop();
     });
 
-    return {
-      id:          uri.split('/').pop(),
-      labels, langs, description: desc, suggested
-    };
+    return { id: uri, labels, langs, description, suggested };
   });
 
-  // 5) Populate HTML table
+  // 5) Render dynamic language filters
+  const allLangs = Array.from(new Set(concepts.flatMap(c => c.langs))).sort();
+  const labelMap = { en:'English', de:'Deutsch', nl:'Nederlands', es:'Español', it:'Italiano' };
+  const $filter  = $('#lang-filter');
+  allLangs.forEach(lang => {
+    const name = labelMap[lang] || lang;
+    $filter.append(`
+      <label>
+        <input type="checkbox" value="${lang}" checked> ${name}
+      </label>
+    `);
+  });
+
+  // 6) Populate table
   const $table = $('#term-table');
-  const tbody  = $table.find('tbody').empty();
+  const $tbody = $table.find('tbody').empty();
   concepts.forEach(c => {
-    tbody.append(`
+    $tbody.append(`
       <tr>
-        <td><a href="http://data.europa.eu/c4p/data/${c.id}"
-               target="_blank">${c.id}</a></td>
+        <td><a href="${c.id}" target="_blank">${c.id}</a></td>
         <td>${c.langs.join(', ')}</td>
         <td>${c.labels.map(l=>l.value).join('<br>')}</td>
         <td>${c.description || '<em>–</em>'}</td>
@@ -92,56 +101,57 @@ async function main() {
     `);
   });
 
-  // 6) Show last modified
-  const modT = triples.find(t => t.predicate.id === NS.modified
-                               && t.object.termType === 'Literal');
+  // 7) Metadata
+  const modT = triples.find(t =>
+    t.predicate.id === NS.modified &&
+    t.object.termType === 'Literal'
+  );
   if (modT) {
-    document.getElementById('dataset-meta').innerText =
-      `Vocabulary last modified: ${modT.object.value}`;
+    $('#dataset-meta').text(`Vocabulary last modified: ${modT.object.value}`);
   } else {
-    document.getElementById('dataset-meta').innerText = '';
+    $('#dataset-meta').empty();
   }
 
-  // 7) Initialize DataTable with CSV button, default sort, and add custom language filter
-  const dataTable = $table.DataTable({
-    order: [
-      [1, 'asc'], // Languages
-      [2, 'asc']  // Labels
-    ],
-    dom: 'Bfrtip',
-    buttons: [
-      {
-        extend: 'csvHtml5',
-        text: 'Download current selection as CSV',
-        filename: 'de-bias-terms',
-        exportOptions: {
-          columns: ':visible'
+  // 8) Initialize DataTable with lengthMenu & CSV button
+  const dt = $table.DataTable({
+    order: [[1,'asc'],[2,'asc']],               // sort by Language, then Label
+    dom: 'Bfrtip',                              // Buttons, filter, table
+    lengthMenu: [[10, 25, 100, -1],             // values :contentReference[oaicite:5]{index=5}
+                 [10, 25, 100, 'All']],         // display labels :contentReference[oaicite:6]{index=6}
+    pageLength: 25,                             // default rows visible
+    buttons: [{
+      extend: 'csvHtml5',
+      text: 'Download current selection as CSV',
+      filename: 'de-bias-terms',
+      exportOptions: {
+        columns: ':visible',
+        format: {
+          body: (data, row, column, node) => {
+            if (column === 0) {
+              return $('a', node).attr('href');
+            }
+            return data.replace(/<br\s*\/?>/g, ' ; ');
+          }
         }
       }
-    ],
-    pageLength: 25
+    }]
   });
 
-  // 8) Language filter logic
-  $('#lang-filter input[type=checkbox]').on('change', function() {
-    // Collect selected langs
+  // 9) Language filter behavior
+  $('#lang-filter input[type=checkbox]').on('change', () => {
     const selected = $('#lang-filter input:checked')
-      .map((i,el) => el.value)
-      .get();
-    // Custom search function: row whose Languages cell includes any selected lang
-    $.fn.dataTable.ext.search.push((settings, rowData) => {
-      const langsCell = rowData[1]; // the Languages column
-      return selected.some(l => langsCell.split(', ').includes(l));
+      .map((_,el) => el.value).get();
+    $.fn.dataTable.ext.search.push((_, rowData) => {
+      return selected.some(l => rowData[1].split(', ').includes(l));
     });
-    dataTable.draw();
-    // Remove this custom filter so it doesn't stack
+    dt.draw();
     $.fn.dataTable.ext.search.pop();
   });
 }
 
 main().catch(err => {
   console.error(err);
-  document.querySelector('main').innerHTML = `
+  $('main').html(`
     <p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>
-  `;
+  `);
 });

@@ -1,117 +1,111 @@
 // script.js
 
-// Namespaces
 const RDF  = $rdf.Namespace("http://www.w3.org/1999/02/22-rdf-syntax-ns#");
 const SKOS = $rdf.Namespace("http://www.w3.org/2004/02/skos/core#");
 const DCT  = $rdf.Namespace("http://purl.org/dc/terms/");
+const DEBIAS = $rdf.Namespace("http://publications.europa.eu/resource/ontology/de-bias#");
 
-// Absolute URL to TTL on GitHub Pages
 const TTL_PATH = "data/DE-BIAS_vocabulary.ttl";
 const TTL_URL  = new URL(TTL_PATH, window.location.href).href;
-
-// rdflib store
 const store = $rdf.graph();
-
-// Kick things off
-window.addEventListener("DOMContentLoaded", loadVocabulary);
 
 async function loadVocabulary() {
   try {
-    // 1) fetch the TTL
     const res = await fetch(TTL_URL);
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     const ttl = await res.text();
-
-    // 2) parse into rdflib
     $rdf.parse(ttl, store, TTL_URL, "text/turtle");
 
-    // 3) extract & render
-    const concepts = extractConcepts(store);
-    renderTable(concepts);
-    renderMetadata(store);
-
+    const data = extractConcepts(store);
+    populateTables(data);
+    populateMetadata(store);
+    initializeDataTables();
   } catch (err) {
     console.error(err);
-    document.querySelector("main").innerHTML =
-      `<p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>`;
+    document.querySelector("main").innerHTML = `<p>⚠️ Failed to load vocabulary.<br><em>${err.message}</em></p>`;
   }
 }
 
+// Only skos:Concept, filter out concept schemes etc. :contentReference[oaicite:5]{index=5}
 function extractConcepts(store) {
-  // find all skos:Concepts
-  const conceptNodes = store
-    .each(undefined, RDF("type"), SKOS("Concept"))
-    .map(sym => sym.value);
+  const nodes = store.each(undefined, RDF("type"), SKOS("Concept"))
+                    .map(sym => sym.value);
 
-  const concepts = conceptNodes.map(uri => {
+  return nodes.map(uri => {
     const node = $rdf.sym(uri);
-    // labels
-    const labels = store
-      .each(node, DCT("title"), null)
-      .map(lit => ({ value: lit.value, lang: lit.lang }));
-    // definitions
-    const defs = [
-      ...store.each(node, SKOS("definition"), null),
-      ...store.each(node, SKOS("scopeNote"), null)
-    ].map(lit => ({ value: lit.value, lang: lit.lang }));
-    // alternatives
-    const alts = store
-      .each(node, SKOS("altLabel"), null)
-      .map(lit => ({ value: lit.value, lang: lit.lang }));
+    // labels from dct:title :contentReference[oaicite:6]{index=6}
+    const labels = store.each(node, DCT("title"), null)
+                        .map(lit => ({value:lit.value, lang:lit.lang}));
+    // definitions from skos:definition & skos:scopeNote :contentReference[oaicite:7]{index=7}
+    const defs = store.each(node, SKOS("definition"), null)
+                      .concat(store.each(node, SKOS("scopeNote"), null))
+                      .map(lit => ({value:lit.value, lang:lit.lang}));
+    // suggestions from debias-o:SuggestionNote
+    const suggs = store.each(node, DEBIAS("SuggestionNote"), null)
+                       .map(lit => ({value:lit.value, lang:lit.lang}));
 
-    // languages present
-    const langs = new Set([
-      ...labels.map(l => l.lang),
-      ...defs.map(d => d.lang),
-      ...alts.map(a => a.lang)
-    ]);
+    const langs = Array.from(new Set([...labels, ...defs, ...suggs].map(x=>x.lang).filter(l=>l)));
 
     return {
-      uri: uri.split("/").pop(),
-      labels,
-      defs,
-      alts,
-      langs: Array.from(langs).filter(l => l)  // drop empty
+      id: uri.split("/").pop(),
+      labels, defs, suggs, langs
     };
   });
-
-  return concepts;
 }
 
-function renderTable(concepts) {
-  const tbody = document.querySelector("#term-table tbody");
-  tbody.innerHTML = "";
-
+// Fill all tables (All + per-language)
+function populateTables(concepts) {
+  // All table
+  const allBody = $("#term-table-all tbody");
   concepts.forEach(c => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><a href="http://data.europa.eu/c4p/data/${c.uri}" target="_blank">${c.uri}</a></td>
-      <td>${c.langs.join(", ")}</td>
-      <td>${c.labels.map(l=>`${l.value} [${l.lang}]`).join("<br>")}</td>
-      <td>${c.defs.map(d=>`${d.value} [${d.lang}]`).join("<br>")}</td>
-      <td>${c.alts.map(a=>`${a.value} [${a.lang}]`).join("<br>")}</td>
-    `;
-    tbody.appendChild(tr);
+    allBody.append(rowHtml(c, true));
   });
-
-  // attach search
-  document.getElementById("search").addEventListener("input", e => {
-    const q = e.target.value.toLowerCase();
-    Array.from(tbody.rows).forEach(row => {
-      row.style.display =
-        row.innerText.toLowerCase().includes(q) ? "" : "none";
-    });
+  // Per language
+  ["en","de","nl","es"].forEach(lang => {
+    const body = $(`#term-table-${lang} tbody`);
+    concepts.filter(c=>c.langs.includes(lang))
+            .forEach(c=> body.append(rowHtml(c, false, lang)));
   });
 }
 
-function renderMetadata(store) {
-  // find the first literal modified date
-  const mods = store
-    .each(undefined, DCT("modified"), null)
-    .filter(o => o.termType === "Literal")
-    .map(o => o.value);
+// Generate row HTML; omit language tags in labels since langs column covers it
+function rowHtml(c, includeLangCol, langOnly) {
+  const lbls = (langOnly? c.labels.filter(l=>l.lang===langOnly):c.labels)
+               .map(l=>l.value).join("<br>");
+  const defs = (langOnly? c.defs.filter(d=>d.lang===langOnly):c.defs)
+               .map(d=>d.value).join("<br>");
+  const sugg = (langOnly? c.suggs.filter(s=>s.lang===langOnly):c.suggs)
+               .map(s=>s.value).join("<br>");
+
+  return `<tr>
+    <td><a href="http://data.europa.eu/c4p/data/${c.id}" target="_blank">${c.id}</a></td>
+    ${ includeLangCol ? `<td>${c.langs.join(", ")}</td>` : "" }
+    <td>${lbls}</td>
+    <td>${defs||"<em>–</em>"}</td>
+    <td>${sugg||"<em>–</em>"}</td>
+  </tr>`;
+}
+
+// Initialize DataTables on each table for sorting/pagination/search :contentReference[oaicite:8]{index=8}
+function initializeDataTables() {
+  $("#term-table-all").DataTable();
+  ["en","de","nl","es"].forEach(lang => {
+    $(`#term-table-${lang}`).DataTable();
+  });
+}
+
+// Show dataset last modified (first literal dct:modified) :contentReference[oaicite:9]{index=9}
+function populateMetadata(store) {
+  const mods = store.each(undefined, DCT("modified"), null)
+                    .filter(o=>o.termType==="Literal")
+                    .map(o=>o.value);
   if (mods.length) {
     document.getElementById("dataset-meta").innerText =
       `Vocabulary last modified: ${mods[0]}`;
   }
 }
+
+window.addEventListener("DOMContentLoaded", () => {
+  loadVocabulary();
+  new Tabby("[data-tabs]");  // initialize Tabby tabs :contentReference[oaicite:10]{index=10}
+});

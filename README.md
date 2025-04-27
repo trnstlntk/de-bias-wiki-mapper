@@ -10,7 +10,9 @@ The tool lives at: https://trnstlntk.github.io/de-bias-wiki-mapper/
 
 ## Status
 
-This is an experiment built with ChatGPT. I am not a coder but am trying to build something that can work as a prototype. 
+This is an experiment built with ChatGPT. I am not a coder but am trying to build something that can work as a prototype. I don't plan to develop this further into a stable piece of software, but if it proves to be useful, I warmly invite others (who are actually developers) to, for instance, fork this or create a better and totally new version.
+
+(April 27, 2025) This tool is unfinished, it only has the very basic functionality of listing the vocabulary so far. I may not work further on this for a while.
 
 The motivation behind this tool is to provide an easy-to-use working environment for Wikidata and Wikipedia editors to discover contested terms, and to see if and how these are present on Wikidata and Wikipedias - either as contested terms or labeled as the alternatives that are considered more respectful.
 
